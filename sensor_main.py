@@ -1,4 +1,4 @@
-#! /usr/bin/python3
+#!/usr/bin/env python3
 # Sensor: Waveshare BME280 Environmental Sensor using the adafruit_bme280 library
 # and their sammple code. credit to https://github.com/adafruit/Adafruit_CircuitPython_BME280
 # Camera: Raspberry Pi Camear Module V2 (RPI-CAM-V2)
@@ -14,6 +14,15 @@ import board  # for BME280
 import busio  # for BME280
 import adafruit_bme280  # for BME280
 import csv  # writing and data into csv
+from subprocess import Popen
+from os import system
+
+camera = PiCamera()  # defind the camera outside of def incase i want to use it elsewhere
+camera.start_preview()  # activate camera
+
+Popen(["/home/pi/lte/lte_led.py"])  # start led for ping
+sleep(2)
+Popen(["/home/pi/sms/smsread.py"])  # start sms control script
 
 # ASCII characters for some symbols I will be using. thank you www.codetable.net
 percent = chr(37)  # %
@@ -65,6 +74,7 @@ def gather():
     Alt = str(A + l + t)
 gather()  # get first readings and discard them
 
+"""
 # display reading from the sensor - only used in command line for troubleshooting
 def show_temp():
     global Temp
@@ -81,16 +91,12 @@ def show_pres():
 def show_alt():
     global Alt
     print(Alt)
-
-# now to setup the camera
-camera = PiCamera()  # defind the camera outside of def incase i want to use it elswhere
-camera.start_preview()  # activate camera
-sleep(5)
+"""
 
 # adding data to CSV
 def log():
     gather()
-    print(Temp)
+#    print(Temp)
     now = strftime('%m%d%Y-%H%M%S')  # output is MMDDYYYY-HHMMSS
     f = open("/home/pi/thp/bme280_data.csv", "a", newline = "")
     tup1 = (now, tempf, (str(hum) + percent), pres)
@@ -102,7 +108,7 @@ def log():
 def get_image():
 #    camera.start_preview()  # activate camera
 #    sleep(3)  # PiCamera documentation recommends at least 2 seconds to allow auto adjust
-    now = strftime('%m%d%Y-%H%M%S')  # output is MMDDYYYY-HHMMSS
+    now = strftime('%m%d%Y-%H%M')  # output is MMDDYYYY-HHMM
     camera.resolution = (1920, 1080)  # set resolution
     camera.brightness = 50  # set brightness
     camera.annotate_text_size = 30
@@ -115,7 +121,6 @@ def get_image():
 #    sleep(0.5)  # just because, not needed
 #    camera.stop_preview()  # deactivate camera
 
-# lets see if we can take a sensor reading every minute, then take a photo on the 5th minute
 rcounter = 0
 lcounter = 0
 pcounter = 0
@@ -125,34 +130,38 @@ z = 600  # take photo on nth minute
 def collect():
     global rcounter, lcounter, pcounter
     if lcounter == 0:  # take photo on furst run
-        print("\nfirst reading")
+#        print("\nfirst reading")
         get_image()
         lcounter += 1  # add 1 to lcounter to push to elif
-        collect()  # start loop over
+#        collect()  # start loop over
 
     elif lcounter != 0 and pcounter == 0:  # take nth minute reading
-        print("\nWaiting for 10th minute")
+#        print("\nWaiting for 10th minute")
         sleep(z - time() % z)
         rcounter += 1
-        print("\ntaking photo")
-        print("read count " + str(rcounter))
+#        print("\ntaking photo")
+#        print("read count " + str(rcounter))
         get_image()
         pcounter += 1  # add 1 to pcounter, push to next elif
-        collect()
+#        collect()
 
     elif pcounter != 0 and rcounter < x:
-        print("\nTaking reading only")
+#        print("\nTaking reading only")
         sleep(y - time() % y)
-        print("\ntaking reading")
+#        print("\ntaking reading")
         log()
         rcounter += 1  # add 1 to rcounter until push to else
-        print("read count " + str(rcounter))
-        collect()
+#        print("read count " + str(rcounter))
+#        collect()
 
     else:
-        print("\nStarting Over")
+#        print("\nStarting Over")
         pcounter = 0  # reset pcounter
         rcounter = 0  # reset rcounter
-        collect()  # start loop over
+#        collect()  # start loop over
 
-collect()  # start the loop
+while True:
+    try:
+        collect()  # start the loop
+    finally:
+        camera.stop_preview()
