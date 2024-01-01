@@ -301,6 +301,7 @@ while True:  # start the loop
         sendCommand('starting SSH')
         sendCommand(END)
         Popen(['ssh -N -R 2222:localhost:22 pi@YOUR_DESTINATION_IP/HOSTNAME'], shell=True)
+        # to connect go to your hostname and ssh -p 2222 pi@localhost
 
     elif b'+VNC' in r2 and num_ber == ADMIN:  # If "+VNC" command comes from ADMIN (line 12)
         sendCommand(CLEAR)
