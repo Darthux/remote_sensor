@@ -3,7 +3,6 @@
 # Disables all non essential devices
 # Checks power voltages/percents on both batteries
 # Starts up rest of system if on primary power
-# Boots up on Lipo Battery
 #
 #	USE  PIN        BCM	     BCM    PIN	USE
 #        3V3 (01)			        (02) 5V
@@ -16,7 +15,7 @@
 #  E-INK_ENA (15)	GP22	GP23	(16) FAN1
 #        3V3 (17)	        GP24    (18) FAN2
 # E-INK_MOSI (19)	GP10		    (20) GND
-# E-INK_MISO (21)	GP09	GP25	(22) THERMISTOR1
+# E-INK_MISO (21)	GP09	GP25	(22)
 #  E-INK_SCK (23)	GP11	GP08	(24) E-INK_ECS
 #        GND (25)	        GP07	(26) RGB_LED_R
 #  RGB_LED_B (27)	GP00	GP01	(28) RGB_LED_G
@@ -33,15 +32,29 @@ from adafruit_lc709203f import LC709203F
 import adafruit_ina260
 from gpiozero import OutputDevice
 from os import system
-from subprocess import Popen
+#from subprocess import Popen
+#import sys
 
 i2c = board.I2C()  # uses board.SCL and board.SDA
-relay = OutputDevice(12)  # non-latching relay NC=lipo, COM=USB, NO=AGM
+relay = OutputDevice(12)  # non-latching relay NO=lipo, COM=USB, NC=AGM
 agm = adafruit_ina260.INA260(i2c)
 lipo = LC709203F(i2c)
 miniboost = OutputDevice(16)  # connected to pn2222 to ground
 lte_hat = OutputDevice(26)
 
+sleep(2)
+system('python3 ~/sms.py YOUR_9_DIGIT_NUMBER "I Have booted"')
+#  if the hat was disabled while program crashes, this will turn it back on.
+if lte_hat.value == 0:
+    lte_hat.on()
+    sleep(5)
+    lte_hat.off()
+    sleep(10)
+else:
+    pass
+
+
+#  battery voltages and percents
 agm_min = 4.9
 agm_mid = 5.6
 agm_max = 6.1
@@ -49,44 +62,59 @@ lipo_max = 80
 lipo_mid = 50
 lipo_min = 30
 
-sleep(10)
-system('python3 ~/sms.py YOUR_9_DIGIT_PHONE_NUMBER "I Have booted"')
-
 print("main battery voltage: " + str(agm.voltage))
 #print("backup battery voltage: " + str(lipo.cell_voltage))
 print("backup battery percent is: " + str(lipo.cell_percent) + "%")
 
-
-'''
-print("Switching to primary power")
-relay.on()
-sleep(10)
-print("Switching to backup power")
-relay.off()
-print("Done")
-'''
-
 def main_power():
     print("Switching to primary power")
-    relay.on()
-    sleep(1)
-    miniboost.on()
-    sleep(1)
-    lte_hat.off()
-    sleep(30)
-    system('python3 ~/sms.py YOUR_9_DIGIT_PHONE_NUMBER "Running on primary power"')
-    Popen(["/home/pi/smsread.py"])
-    sleep(5)
-    Popen(["/home/pi/logtime.py"])
+    if lte_hat.value == 1:
+        lte_hat.off()
+        sleep(30)
+    else:
+        pass
+
+    if relay.value == 0:
+        relay.on()
+        sleep(5)
+        system('python3 ~/sms.py YOUR_9_DIGIT_NUMBER "Running on primary power"')
+        sleep(1)
+        system('/home/pi/sensor_main.sh & >> /home/pi/logs/sensor_main.log')
+        sleep(2)
+        system('/home/pi/smsread.sh & >> /home/pi/logs/smsread.log')
+    else:
+        pass
+
+    sleep(.5)
+    if miniboost.value == 0:
+        miniboost.on()
+    else:
+        pass
 
 def backup_power():
     print("Switching to backup power")
-    system('python3 ~/sms.py YOUR_9_DIGIT_PHONE_NUMBER "Running on primary power"')
+    if lte_hat.value == 1:
+        pass
+    else:
+        system('python3 ~/sms.py YOUR_9_DIGIT_NUMBER "Running on backup power"')
+
     sleep(5)
-    lte_hat.on()
-    miniboost.off()
+    if lte_hat.value == 0:
+        lte_hat.on()
+    else:
+        pass
+
     sleep(.5)
-    relay.off()
+    if miniboost.value == 1:
+        miniboost.off()
+    else:
+        pass
+
+    sleep(.5)
+    if relay.value == 1:
+        relay.off()
+    else:
+        pass
 
 def the_loop():
     print("agm voltage: " + str(agm.voltage))
@@ -103,11 +131,10 @@ def the_loop():
             backup_power()
             sleep(60*30)
     elif relay.value == 0:
-        if agm.voltage >= agm_mid:
+        if agm.voltage > agm_min:
             main_power()
             sleep(60*60)
         elif lipo.cell_percent >= lipo_max:
-            #  put code here for checking if solar is charging TBD
             sleep(60*30)
         elif lipo.cell_percent >= lipo_mid:
             sleep(60*120)
@@ -115,4 +142,4 @@ def the_loop():
             sleep(60*360)
 
 while True:
-    the_loop()
+    the_loop()  # start the loop
